@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { GitBranch, User, CheckCircle, XCircle, Award, ChevronDown } from 'lucide-react';
 import { referralService } from '../../services/api';
+import { useToast } from '../../context/ToastContext';
 
 const STATUS_COLORS = { pending: '#fbbf24', accepted: '#22d3ee', rejected: '#f43f5e', referred: '#a3e635' };
 
@@ -10,17 +11,25 @@ export default function AlumniReferrals() {
   const [loading, setLoading] = useState(true);
   const [expanded, setExpanded] = useState(null);
   const [feedback, setFeedback] = useState({});
+  const [responding, setResponding] = useState(null);
+  const toast = useToast();
 
   useEffect(() => {
-    referralService.getStatus().then(r => setReferrals(r.data)).finally(() => setLoading(false));
+    referralService.getAlumniReferrals().then(r => setReferrals(r.data)).finally(() => setLoading(false));
   }, []);
 
   const respond = async (id, status) => {
+    setResponding(id);
     try {
       await referralService.respond(id, { status, feedback: feedback[id] || '' });
       setReferrals(p => p.map(r => r.id === id ? { ...r, status } : r));
       setExpanded(null);
-    } catch (err) { alert(err.response?.data?.error || 'Failed'); }
+      setFeedback(prev => ({ ...prev, [id]: '' }));
+    } catch (err) {
+      toast.error(err.response?.data?.error || 'Failed');
+    } finally {
+      setResponding(null);
+    }
   };
 
   if (loading) return <div className="space-y-4">{[...Array(4)].map((_, i) => <div key={i} className="glass rounded-2xl h-24 animate-pulse" />)}</div>;
@@ -90,14 +99,26 @@ export default function AlumniReferrals() {
                       <textarea value={feedback[ref.id] || ''} onChange={e => setFeedback(p => ({ ...p, [ref.id]: e.target.value }))}
                         placeholder="Optional feedback for student..." className="input text-sm min-h-16 resize-none" />
                       <div className="flex gap-2">
-                        <button onClick={() => respond(ref.id, 'rejected')} className="flex-1 py-2 rounded-xl text-sm font-medium bg-red-500/10 text-red-400 hover:bg-red-500/20 transition-all flex items-center justify-center gap-1">
-                          <XCircle size={14} /> Decline
+                        <button
+                          onClick={() => respond(ref.id, 'rejected')}
+                          disabled={responding === ref.id}
+                          className="flex-1 py-2 rounded-xl text-sm font-medium bg-red-500/10 text-red-400 hover:bg-red-500/20 transition-all flex items-center justify-center gap-1 disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                          {responding === ref.id ? 'Processing...' : <><XCircle size={14} /> Decline</>}
                         </button>
-                        <button onClick={() => respond(ref.id, 'accepted')} className="flex-1 py-2 rounded-xl text-sm font-medium bg-accent-cyan/10 text-accent-cyan hover:bg-accent-cyan/20 transition-all flex items-center justify-center gap-1">
-                          <CheckCircle size={14} /> Accept
+                        <button
+                          onClick={() => respond(ref.id, 'accepted')}
+                          disabled={responding === ref.id}
+                          className="flex-1 py-2 rounded-xl text-sm font-medium bg-accent-cyan/10 text-accent-cyan hover:bg-accent-cyan/20 transition-all flex items-center justify-center gap-1 disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                          {responding === ref.id ? 'Processing...' : <><CheckCircle size={14} /> Accept</>}
                         </button>
-                        <button onClick={() => respond(ref.id, 'referred')} className="flex-1 py-2 rounded-xl text-sm font-medium bg-accent-lime/10 text-accent-lime hover:bg-accent-lime/20 transition-all flex items-center justify-center gap-1">
-                          <Award size={14} /> Refer
+                        <button
+                          onClick={() => respond(ref.id, 'referred')}
+                          disabled={responding === ref.id}
+                          className="flex-1 py-2 rounded-xl text-sm font-medium bg-accent-lime/10 text-accent-lime hover:bg-accent-lime/20 transition-all flex items-center justify-center gap-1 disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                          {responding === ref.id ? 'Processing...' : <><Award size={14} /> Refer</>}
                         </button>
                       </div>
                     </motion.div>

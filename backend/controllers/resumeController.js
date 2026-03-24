@@ -1,4 +1,4 @@
-import { supabase } from '../config/supabase.js';
+import User from '../models/User.js';
 
 const SKILL_KEYWORDS = ['javascript', 'python', 'react', 'node', 'sql', 'java', 'typescript', 'aws', 'docker', 'kubernetes', 'machine learning', 'data science', 'figma', 'ui/ux', 'css', 'html', 'mongodb', 'postgresql', 'git', 'rest api', 'graphql', 'vue', 'angular', 'swift', 'flutter', 'go', 'rust', 'c++', 'c#', 'php', 'ruby', 'scala'];
 
@@ -21,7 +21,7 @@ export const analyzeResume = async (req, res) => {
 
     score = Math.min(score, 100);
 
-    await supabase.from('users').update({ skills: extractedSkills }).eq('id', req.user.id);
+    await User.findByIdAndUpdate(req.user.id, { skills: extractedSkills });
 
     res.json({ score, extractedSkills, suggestions, wordCount: resumeText.split(/\s+/).length });
   } catch (err) {

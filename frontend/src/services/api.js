@@ -31,7 +31,10 @@ export const jobService = {
 export const referralService = {
   request: (data) => api.post('/referrals/request', data),
   respond: (id, data) => api.put(`/referrals/respond/${id}`, data),
+  cancel: (id) => api.put(`/referrals/cancel/${id}`),
   getStatus: () => api.get('/referrals/status'),
+  getStudentReferrals: () => api.get('/referrals/student'),
+  getAlumniReferrals: () => api.get('/referrals/alumni'),
   getAll: () => api.get('/referrals/all'),
 };
 
@@ -45,6 +48,12 @@ export const adminService = {
   getAlumni: () => api.get('/admin/alumni'),
   verifyAlumni: (id, status) => api.put(`/admin/alumni/${id}/verify`, { status }),
   getStats: () => api.get('/admin/stats'),
+};
+
+export const notificationService = {
+  getNotifications: () => api.get('/notifications'),
+  markRead: (id) => api.put(`/notifications/${id}/read`),
+  markAllRead: () => api.put('/notifications/read-all'),
 };
 
 export const resumeService = {

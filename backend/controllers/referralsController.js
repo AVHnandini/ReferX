@@ -25,12 +25,10 @@ exports.requestReferral = async (req, res) => {
     if (error) throw error;
 
     // Create notification for alumni
-    await supabase.from('notifications').insert({
-      user_id: alumniId,
-      type: 'referral_request',
+    await Notification.create({
+      userId: alumni_id,
       title: 'New Referral Request',
-      message: `${req.user.name} requested a referral for ${data.job?.title}`,
-      data: { referralId: data.id },
+      message: `${req.user.name} requested a referral for ${job.title} at ${job.company}`,
     });
 
     // Award points for requesting referral

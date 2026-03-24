@@ -1,14 +1,11 @@
-import { supabase } from '../config/supabase.js';
+import User from '../models/User.js';
+import Referral from '../models/Referral.js';
+import Job from '../models/Job.js';
 
 export const getPendingAlumni = async (req, res) => {
   try {
-    const { data, error } = await supabase
-      .from('users')
-      .select('id, name, email, company, job_role, experience, linkedin, verification_status, created_at')
-      .eq('role', 'alumni')
-      .order('created_at', { ascending: false });
-    if (error) throw error;
-    res.json(data);
+    const alumni = await User.find({ role: 'alumni' }).sort({ createdAt: -1 }).select('name email company jobRole experience linkedin verificationStatus createdAt');
+    res.json(alumni);
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -17,23 +14,10 @@ export const getPendingAlumni = async (req, res) => {
 export const verifyAlumni = async (req, res) => {
   try {
     const { id } = req.params;
-    const { status } = req.body; // approved or rejected
-    const { data, error } = await supabase
-      .from('users')
-      .update({ verification_status: status })
-      .eq('id', id)
-      .select()
-      .single();
-    if (error) throw error;
-
-    await supabase.from('alumni_verifications').upsert({
-      alumni_id: id,
-      status,
-      reviewed_by: req.user.id,
-      reviewed_at: new Date().toISOString()
-    });
-
-    res.json(data);
+    const { status } = req.body;
+    const user = await User.findByIdAndUpdate(id, { verificationStatus: status }, { new: true });
+    if (!user) return res.status(404).json({ error: 'Alumni not found.' });
+    res.json(user);
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -42,26 +26,26 @@ export const verifyAlumni = async (req, res) => {
 export const getDashboardStats = async (req, res) => {
   try {
     const [students, alumni, referrals, jobs, pending] = await Promise.all([
-      supabase.from('users').select('id', { count: 'exact' }).eq('role', 'student'),
-      supabase.from('users').select('id', { count: 'exact' }).eq('role', 'alumni'),
-      supabase.from('referrals').select('id, status', { count: 'exact' }),
-      supabase.from('jobs').select('id', { count: 'exact' }).eq('is_active', true),
-      supabase.from('users').select('id', { count: 'exact' }).eq('role', 'alumni').eq('verification_status', 'pending'),
+      User.countDocuments({ role: 'student' }),
+      User.countDocuments({ role: 'alumni' }),
+      Referral.countDocuments(),
+      Job.countDocuments({ isActive: true }),
+      User.countDocuments({ role: 'alumni', verificationStatus: 'pending' }),
     ]);
 
-    const referralData = referrals.data || [];
-    const statusCounts = referralData.reduce((acc, r) => {
+    const referralRecords = await Referral.find({}, 'status');
+    const statusCounts = referralRecords.reduce((acc, r) => {
       acc[r.status] = (acc[r.status] || 0) + 1;
       return acc;
     }, {});
 
     res.json({
-      total_students: students.count || 0,
-      total_alumni: alumni.count || 0,
-      total_referrals: referrals.count || 0,
-      active_jobs: jobs.count || 0,
-      pending_alumni: pending.count || 0,
-      referral_breakdown: statusCounts
+      total_students: students,
+      total_alumni: alumni,
+      total_referrals: referrals,
+      active_jobs: jobs,
+      pending_alumni: pending,
+      referral_breakdown: statusCounts,
     });
   } catch (err) {
     res.status(500).json({ error: err.message });

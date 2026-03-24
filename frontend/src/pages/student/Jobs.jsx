@@ -1,18 +1,21 @@
 import React, { useState, useEffect } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
-import { Search, MapPin, Building, DollarSign, GitBranch, X, ChevronRight, Briefcase } from 'lucide-react';
+import { motion } from 'framer-motion';
+import { Search, Filter, Briefcase, CheckCircle } from 'lucide-react';
 import { jobService, referralService, userService } from '../../services/api';
+import { useToast } from '../../context/ToastContext';
+import JobCard from '../../components/student/JobCard';
 
 export default function StudentJobs() {
   const [jobs, setJobs] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [search, setSearch] = useState('');
-  const [selected, setSelected] = useState(null);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [selectedSkills, setSelectedSkills] = useState([]);
   const [requestModal, setRequestModal] = useState(null);
   const [message, setMessage] = useState('');
   const [submitting, setSubmitting] = useState(false);
-  const [success, setSuccess] = useState('');
   const [alumni, setAlumni] = useState([]);
+  const [selectedAlumni, setSelectedAlumni] = useState(null);
+  const toast = useToast();
 
   useEffect(() => {
     Promise.all([jobService.getRecommended(), userService.getAllUsers()])
@@ -24,170 +27,275 @@ export default function StudentJobs() {
       .finally(() => setLoading(false));
   }, []);
 
-  const filtered = jobs.filter(j =>
-    j.title?.toLowerCase().includes(search.toLowerCase()) ||
-    j.company?.toLowerCase().includes(search.toLowerCase()) ||
-    j.location?.toLowerCase().includes(search.toLowerCase())
-  );
+  const filteredJobs = jobs.filter(job => {
+    const matchesSearch = job.title?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                         job.company?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                         job.location?.toLowerCase().includes(searchTerm.toLowerCase());
 
-  const handleRequest = async () => {
-    if (!requestModal) return;
-    setSubmitting(true);
-    try {
-      const alumniForJob = alumni.find(a => a.company === requestModal.company);
-      if (!alumniForJob) { alert('No verified alumni found for this company.'); return; }
-      await referralService.request({ alumni_id: alumniForJob.id, job_id: requestModal.id, message });
-      setSuccess('Referral request sent!');
-      setRequestModal(null); setMessage('');
-      setTimeout(() => setSuccess(''), 3000);
-    } catch (err) {
-      alert(err.response?.data?.error || 'Failed to send request');
-    } finally { setSubmitting(false); }
+    const matchesSkills = selectedSkills.length === 0 ||
+                         selectedSkills.some(skill =>
+                           job.required_skills?.some(jobSkill =>
+                             jobSkill.toLowerCase().includes(skill.toLowerCase())
+                           )
+                         );
+
+    return matchesSearch && matchesSkills;
+  });
+
+  const allSkills = [...new Set(jobs.flatMap(job => job.required_skills || []))];
+
+  const toggleSkill = (skill) => {
+    setSelectedSkills(prev =>
+      prev.includes(skill)
+        ? prev.filter(s => s !== skill)
+        : [...prev, skill]
+    );
   };
 
-  return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="font-display text-2xl font-bold">Job Board</h1>
-        <p className="text-gray-400 text-sm mt-1">Browse and request referrals for open positions</p>
-      </div>
+  const handleViewDetails = (job) => {
+    // Navigate to job details page or open modal
+    console.log('View job details:', job);
+  };
 
-      <div className="relative">
-        <Search size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-500" />
-        <input placeholder="Search jobs, companies, locations..." value={search}
-          onChange={e => setSearch(e.target.value)} className="input pl-11" />
-      </div>
+  const handleRequestReferral = (job) => {
+    setRequestModal(job);
+    setSelectedAlumni(null);
+    setMessage('');
+  };
 
-      {success && (
-        <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }}
-          className="p-4 rounded-xl bg-accent-lime/10 border border-accent-lime/30 text-accent-lime text-sm">
-          {success}
-        </motion.div>
-      )}
+  const submitReferralRequest = async () => {
+    if (!requestModal || !selectedAlumni) return;
+    setSubmitting(true);
 
-      {loading ? (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {[...Array(6)].map((_, i) => <div key={i} className="glass rounded-2xl h-48 animate-pulse" />)}
-        </div>
-      ) : (
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {/* Job List */}
-          <div className="lg:col-span-2 space-y-4">
-            {filtered.length === 0 ? (
-              <div className="card text-center py-12 text-gray-500">
-                <Briefcase size={40} className="mx-auto mb-3 opacity-30" />
-                <p>No jobs found. Check back soon!</p>
-              </div>
-            ) : filtered.map((job, i) => (
-              <motion.div key={job.id} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: i * 0.04 }}
-                onClick={() => setSelected(job)}
-                className={`card cursor-pointer hover:bg-white/10 transition-all group ${selected?.id === job.id ? 'border-brand-500/40 bg-brand-500/5' : ''}`}>
-                <div className="flex items-start justify-between">
-                  <div className="flex items-start gap-3">
-                    <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-brand-600 to-brand-800 flex items-center justify-center text-white font-bold flex-shrink-0">
-                      {job.company?.[0]}
-                    </div>
-                    <div>
-                      <h3 className="font-semibold text-white group-hover:text-brand-300 transition-colors">{job.title}</h3>
-                      <p className="text-sm text-gray-400">{job.company}</p>
-                    </div>
-                  </div>
-                  <div className="flex flex-col items-end gap-2">
-                    {job.match_percentage > 0 && (
-                      <span className="text-xs px-2 py-1 rounded-full bg-accent-lime/10 text-accent-lime font-bold">
-                        {job.match_percentage}% match
-                      </span>
-                    )}
-                  </div>
-                </div>
-                <div className="flex flex-wrap gap-3 mt-3 text-xs text-gray-500">
-                  <span className="flex items-center gap-1"><MapPin size={12} />{job.location}</span>
-                  <span className="flex items-center gap-1"><DollarSign size={12} />{job.salary}</span>
-                </div>
-                <div className="flex flex-wrap gap-1 mt-3">
-                  {(job.required_skills || []).slice(0, 4).map(s => (
-                    <span key={s} className="text-xs px-2 py-0.5 rounded-full glass text-gray-300">{s}</span>
-                  ))}
-                </div>
-              </motion.div>
+    try {
+      await referralService.request({
+        alumni_id: selectedAlumni.id,
+        job_id: requestModal.id,
+        message: message || 'I would appreciate a referral for this position.'
+      });
+
+      toast.success('Referral request sent successfully!');
+      setRequestModal(null);
+      setSelectedAlumni(null);
+      setMessage('');
+    } catch (err) {
+      toast.error(err.response?.data?.error || 'Failed to send request');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-slate-950 via-indigo-950 to-slate-900 p-6">
+        <div className="max-w-7xl mx-auto">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {[...Array(6)].map((_, i) => (
+              <div key={i} className="glass rounded-2xl h-64 animate-pulse" />
             ))}
           </div>
+        </div>
+      </div>
+    );
+  }
 
-          {/* Detail Panel */}
-          <div className="lg:col-span-1">
-            <AnimatePresence mode="wait">
-              {selected ? (
-                <motion.div key={selected.id} initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: 20 }}
-                  className="card sticky top-4 space-y-4">
-                  <div className="flex items-start justify-between">
-                    <div>
-                      <h2 className="font-display font-bold text-lg">{selected.title}</h2>
-                      <p className="text-brand-400 font-medium">{selected.company}</p>
-                    </div>
-                    <button onClick={() => setSelected(null)} className="p-1 rounded-lg glass text-gray-400 hover:text-white">
-                      <X size={16} />
-                    </button>
-                  </div>
-                  <div className="space-y-2 text-sm text-gray-400">
-                    <div className="flex items-center gap-2"><MapPin size={14} />{selected.location}</div>
-                    <div className="flex items-center gap-2"><DollarSign size={14} />{selected.salary}</div>
-                  </div>
-                  <p className="text-sm text-gray-300 leading-relaxed">{selected.description}</p>
-                  <div>
-                    <p className="text-xs font-medium text-gray-400 mb-2">Required Skills</p>
-                    <div className="flex flex-wrap gap-1">
-                      {(selected.required_skills || []).map(s => (
-                        <span key={s} className="text-xs px-2 py-1 rounded-full bg-brand-500/10 text-brand-400">{s}</span>
-                      ))}
-                    </div>
-                  </div>
-                  <button onClick={() => setRequestModal(selected)}
-                    className="btn-primary w-full flex items-center justify-center gap-2">
-                    <GitBranch size={16} /> Request Referral
+  return (
+    <div className="min-h-screen bg-gradient-to-br from-slate-950 via-indigo-950 to-slate-900 p-6">
+      <div className="max-w-7xl mx-auto">
+        {/* Header */}
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="mb-8"
+        >
+          <h1 className="text-3xl font-bold text-white mb-2">Job Board</h1>
+          <p className="text-gray-400">
+            Discover opportunities and request referrals from verified alumni
+          </p>
+        </motion.div>
+
+        {/* Search and Filters */}
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.1 }}
+          className="mb-8"
+        >
+          <div className="flex flex-col lg:flex-row gap-4">
+            {/* Search */}
+            <div className="flex-1">
+              <div className="relative">
+                <Search size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" />
+                <input
+                  type="text"
+                  placeholder="Search jobs, companies, locations..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="w-full pl-12 pr-4 py-3 rounded-xl glass text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500/50"
+                />
+              </div>
+            </div>
+
+            {/* Skills Filter */}
+            <div className="lg:w-80">
+              <div className="relative">
+                <Filter size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" />
+                <select
+                  multiple
+                  value={selectedSkills}
+                  onChange={(e) => {
+                    const values = Array.from(e.target.selectedOptions, option => option.value);
+                    setSelectedSkills(values);
+                  }}
+                  className="w-full pl-12 pr-4 py-3 rounded-xl glass text-white focus:outline-none focus:ring-2 focus:ring-blue-500/50 bg-transparent"
+                >
+                  {allSkills.map(skill => (
+                    <option key={skill} value={skill} className="bg-gray-800 text-white">
+                      {skill}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+          </div>
+
+          {/* Selected Skills */}
+          {selectedSkills.length > 0 && (
+            <div className="flex flex-wrap gap-2 mt-4">
+              {selectedSkills.map(skill => (
+                <span
+                  key={skill}
+                  className="inline-flex items-center gap-2 bg-blue-500/20 text-blue-300 px-3 py-1 rounded-full text-sm"
+                >
+                  {skill}
+                  <button
+                    onClick={() => toggleSkill(skill)}
+                    className="text-blue-400 hover:text-blue-200"
+                  >
+                    ×
                   </button>
-                  {selected.application_link && (
-                    <a href={selected.application_link} target="_blank" rel="noopener noreferrer"
-                      className="btn-secondary w-full flex items-center justify-center gap-2 text-sm">
-                      Apply Directly <ChevronRight size={14} />
-                    </a>
-                  )}
-                </motion.div>
-              ) : (
-                <div className="card text-center py-12 text-gray-500">
-                  <Briefcase size={32} className="mx-auto mb-2 opacity-30" />
-                  <p className="text-sm">Select a job to view details</p>
+                </span>
+              ))}
+            </div>
+          )}
+        </motion.div>
+
+        {/* Jobs Grid */}
+        {filteredJobs.length === 0 ? (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            className="text-center py-16"
+          >
+            <Briefcase size={64} className="mx-auto text-gray-600 mb-4" />
+            <h3 className="text-xl font-medium text-gray-400 mb-2">No jobs found</h3>
+            <p className="text-gray-500">Try adjusting your search or filter criteria</p>
+          </motion.div>
+        ) : (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6"
+          >
+            {filteredJobs.map((job, index) => (
+              <JobCard
+                key={job.id}
+                job={job}
+                onViewDetails={handleViewDetails}
+                onRequestReferral={handleRequestReferral}
+                delay={0.2 + index * 0.1}
+              />
+            ))}
+          </motion.div>
+        )}
+
+        {/* Referral Request Modal */}
+        {requestModal && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50"
+            onClick={() => setRequestModal(null)}
+          >
+            <motion.div
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.9, opacity: 0 }}
+              className="glass rounded-2xl p-6 w-full max-w-lg max-h-[80vh] overflow-y-auto"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <h3 className="text-xl font-bold text-white mb-4">Request Referral</h3>
+              <div className="mb-4">
+                <p className="text-gray-300 mb-2">Position: {requestModal.title}</p>
+                <p className="text-gray-400 text-sm">Company: {requestModal.company}</p>
+              </div>
+
+              <div className="mb-4">
+                <h4 className="text-white font-medium mb-3">Select Alumni to Request From:</h4>
+                <div className="space-y-2 max-h-48 overflow-y-auto">
+                  {alumni.filter(a => a.verification_status === 'approved').map((alum) => (
+                    <div
+                      key={alum.id}
+                      onClick={() => setSelectedAlumni(alum)}
+                      className={`p-3 rounded-xl cursor-pointer transition-colors ${
+                        selectedAlumni?.id === alum.id
+                          ? 'bg-blue-600/20 border border-blue-500/50'
+                          : 'glass hover:bg-white/10'
+                      }`}
+                    >
+                      <div className="flex items-center gap-3">
+                        <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-600 to-blue-800 flex items-center justify-center text-white font-bold text-sm">
+                          {alum.name?.[0]?.toUpperCase()}
+                        </div>
+                        <div className="flex-1">
+                          <p className="text-white font-medium">{alum.name}</p>
+                          <p className="text-gray-400 text-sm">{alum.job_role} at {alum.company}</p>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+                {alumni.filter(a => a.verification_status === 'approved').length === 0 && (
+                  <p className="text-gray-400 text-sm text-center py-4">No verified alumni available for this company.</p>
+                )}
+              </div>
+
+              {selectedAlumni && (
+                <div className="mb-4">
+                  <textarea
+                    placeholder="Add a personal message (optional)..."
+                    value={message}
+                    onChange={(e) => setMessage(e.target.value)}
+                    rows={3}
+                    className="w-full px-4 py-3 rounded-xl glass text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500/50 resize-none"
+                  />
                 </div>
               )}
-            </AnimatePresence>
-          </div>
-        </div>
-      )}
 
-      {/* Referral Request Modal */}
-      <AnimatePresence>
-        {requestModal && (
-          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-            className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4"
-            onClick={e => e.target === e.currentTarget && setRequestModal(null)}>
-            <motion.div initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.95, opacity: 0 }}
-              className="glass rounded-2xl p-6 w-full max-w-md">
-              <h3 className="font-display font-bold text-lg mb-1">Request Referral</h3>
-              <p className="text-gray-400 text-sm mb-4">{requestModal.title} at {requestModal.company}</p>
-              <textarea value={message} onChange={e => setMessage(e.target.value)}
-                placeholder="Write a personal message to the alumni — mention your background, why you're interested, etc."
-                className="input min-h-28 resize-none text-sm" />
-              <div className="flex gap-3 mt-4">
-                <button onClick={() => setRequestModal(null)} className="btn-secondary flex-1">Cancel</button>
-                <button onClick={handleRequest} disabled={submitting}
-                  className="btn-primary flex-1 flex items-center justify-center gap-2">
-                  {submitting ? <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" /> : 'Send Request'}
+              <div className="flex gap-3">
+                <button
+                  onClick={() => setRequestModal(null)}
+                  className="flex-1 py-3 px-4 rounded-xl glass text-gray-300 hover:bg-white/10 transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={submitReferralRequest}
+                  disabled={submitting || !selectedAlumni}
+                  className="flex-1 py-3 px-4 rounded-xl bg-blue-600 hover:bg-blue-500 disabled:bg-blue-600/50 text-white font-medium transition-colors flex items-center justify-center gap-2"
+                >
+                  {submitting ? (
+                    <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                  ) : (
+                    'Send Request'
+                  )}
                 </button>
               </div>
             </motion.div>
           </motion.div>
         )}
-      </AnimatePresence>
+      </div>
     </div>
   );
 }

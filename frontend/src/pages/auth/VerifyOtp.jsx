@@ -38,7 +38,15 @@ export default function VerifyOtp() {
     try {
       const { data } = await authService.verifyOtp({ email, otp });
       login(data.token, data.user);
-      navigate('/' + data.user.role);
+      const target =
+        data.user.role === 'student'
+          ? '/student/dashboard'
+          : data.user.role === 'alumni'
+            ? '/alumni/dashboard'
+            : data.user.role === 'admin'
+              ? '/admin/dashboard'
+              : '/login';
+      navigate(target);
     } catch (err) {
       setError(err.response?.data?.error || 'Invalid OTP');
     } finally { setLoading(false); }

@@ -1,22 +1,42 @@
-import { supabase } from '../config/supabase.js';
+import Referral from '../models/Referral.js';
+import User from '../models/User.js';
+import Job from '../models/Job.js';
+import Notification from '../models/Notification.js';
 
 export const requestReferral = async (req, res) => {
   try {
     const { alumni_id, job_id, message } = req.body;
-    
-    // Check alumni is approved
-    const { data: alumni } = await supabase.from('users').select('verification_status').eq('id', alumni_id).single();
-    if (alumni?.verification_status !== 'approved') {
+
+    // Check for existing referral
+    const existing = await Referral.findOne({
+      studentId: req.user.id,
+      alumniId: alumni_id,
+      jobId: job_id,
+      status: { $in: ['pending', 'accepted'] }
+    });
+    if (existing) {
+      return res.status(400).json({ error: 'Referral request already exists for this job and alumni.' });
+    }
+
+    const alumni = await User.findById(alumni_id);
+    if (!alumni || alumni.verificationStatus !== 'approved') {
       return res.status(400).json({ error: 'Alumni not yet verified.' });
     }
 
-    const { data, error } = await supabase
-      .from('referrals')
-      .insert({ student_id: req.user.id, alumni_id, job_id, message, status: 'pending' })
-      .select()
-      .single();
-    if (error) throw error;
-    res.json(data);
+    const job = await Job.findById(job_id);
+    if (!job) return res.status(404).json({ error: 'Job not found.' });
+
+    const referral = new Referral({ studentId: req.user.id, alumniId: alumni_id, jobId: job_id, message, status: 'pending' });
+    await referral.save();
+
+    // Create notification for alumni
+    await Notification.create({
+      userId: alumni_id,
+      title: 'New Referral Request',
+      message: `${req.user.name} requested a referral for ${job.title} at ${job.company}`,
+    });
+
+    res.json(referral);
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -24,18 +44,29 @@ export const requestReferral = async (req, res) => {
 
 export const respondToReferral = async (req, res) => {
   try {
-    const { id } = req.params;
-    const { status, feedback } = req.body; // accepted, rejected, referred
+    const { status, feedback } = req.body;
+    const referral = await Referral.findOneAndUpdate(
+      { _id: req.params.id, alumniId: req.user.id },
+      { status, feedback },
+      { new: true },
+    ).populate('studentId', 'name').populate('jobId', 'title company');
 
-    const { data, error } = await supabase
-      .from('referrals')
-      .update({ status, feedback, updated_at: new Date().toISOString() })
-      .eq('id', id)
-      .eq('alumni_id', req.user.id)
-      .select()
-      .single();
-    if (error) throw error;
-    res.json(data);
+    if (!referral) return res.status(404).json({ error: 'Referral not found.' });
+
+    // Create notification for student
+    const statusMessages = {
+      accepted: 'accepted your referral request',
+      rejected: 'declined your referral request',
+      referred: 'successfully referred you'
+    };
+
+    await Notification.create({
+      userId: referral.studentId._id,
+      title: 'Referral Request Update',
+      message: `${req.user.name} ${statusMessages[status]} for ${referral.jobId.title} at ${referral.jobId.company}`,
+    });
+
+    res.json(referral);
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -44,15 +75,57 @@ export const respondToReferral = async (req, res) => {
 export const getReferralStatus = async (req, res) => {
   try {
     const { role, id } = req.user;
-    const field = role === 'student' ? 'student_id' : 'alumni_id';
-    
-    const { data, error } = await supabase
-      .from('referrals')
-      .select('*, jobs(*), student:users!referrals_student_id_fkey(id,name,email,skills,resume,profile_score), alumni:users!referrals_alumni_id_fkey(id,name,email,company,job_role)')
-      .eq(field, id)
-      .order('created_at', { ascending: false });
-    if (error) throw error;
-    res.json(data);
+    const filter = role === 'student' ? { studentId: id } : { alumniId: id };
+
+    const referrals = await Referral.find(filter)
+      .populate('jobId', 'title company')
+      .populate('studentId', 'name email skills resume profileScore')
+      .populate('alumniId', 'name email company jobRole')
+      .sort({ createdAt: -1 });
+
+    res.json(referrals);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+};
+
+export const getStudentReferrals = async (req, res) => {
+  try {
+    const referrals = await Referral.find({ studentId: req.user.id })
+      .populate('jobId', 'title company')
+      .populate('alumniId', 'name email company jobRole')
+      .sort({ createdAt: -1 });
+
+    res.json(referrals);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+};
+
+export const getAlumniReferrals = async (req, res) => {
+  try {
+    const referrals = await Referral.find({ alumniId: req.user.id })
+      .populate('jobId', 'title company')
+      .populate('studentId', 'name email skills resume profileScore')
+      .sort({ createdAt: -1 });
+
+    res.json(referrals);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+};
+
+export const cancelReferral = async (req, res) => {
+  try {
+    const referral = await Referral.findOneAndUpdate(
+      { _id: req.params.id, studentId: req.user.id, status: 'pending' },
+      { status: 'cancelled' },
+      { new: true },
+    );
+
+    if (!referral) return res.status(404).json({ error: 'Pending referral not found.' });
+
+    res.json(referral);
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -60,12 +133,12 @@ export const getReferralStatus = async (req, res) => {
 
 export const getAllReferrals = async (req, res) => {
   try {
-    const { data, error } = await supabase
-      .from('referrals')
-      .select('*, jobs(title,company), student:users!referrals_student_id_fkey(name,email), alumni:users!referrals_alumni_id_fkey(name,email)')
-      .order('created_at', { ascending: false });
-    if (error) throw error;
-    res.json(data);
+    const referrals = await Referral.find({})
+      .populate('jobId', 'title company')
+      .populate('studentId', 'name email')
+      .populate('alumniId', 'name email')
+      .sort({ createdAt: -1 });
+    res.json(referrals);
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

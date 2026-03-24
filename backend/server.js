@@ -11,6 +11,8 @@ import referralRoutes from "./routes/referrals.js";
 import chatRoutes from "./routes/chat.js";
 import adminRoutes from "./routes/admin.js";
 import resumeRoutes from "./routes/resume.js";
+import notificationRoutes from "./routes/notifications.js";
+import { connectDB } from "./config/db.js";
 
 dotenv.config();
 
@@ -71,6 +73,7 @@ app.use("/referrals", referralRoutes);
 app.use("/chat", chatRoutes);
 app.use("/admin", adminRoutes);
 app.use("/resume", resumeRoutes);
+app.use("/notifications", notificationRoutes);
 
 app.get("/health", (_, res) => res.json({ status: "ok", version: "1.0.0" }));
 
@@ -109,6 +112,12 @@ io.on("connection", (socket) => {
 });
 
 const PORT = process.env.PORT || 5000;
-httpServer.listen(PORT, () =>
-  console.log(`🚀 ReferX Backend running on port ${PORT}`),
-);
+
+connectDB().then(() => {
+  httpServer.listen(PORT, () =>
+    console.log(`🚀 ReferX Backend running on port ${PORT}`),
+  );
+}).catch((err) => {
+  console.error('Failed to start server:', err);
+  process.exit(1);
+});

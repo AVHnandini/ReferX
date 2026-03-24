@@ -1,156 +1,263 @@
 import React, { useState } from 'react';
 import { motion } from 'framer-motion';
-import { User, Linkedin, Plus, X, Upload, Zap } from 'lucide-react';
+import { User, Mail, GraduationCap, Building, Plus, X, Save, CheckCircle } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
-import { userService, resumeService } from '../../services/api';
+import { userService } from '../../services/api';
+import ProfileCard from '../../components/student/ProfileCard';
+import ResumeUpload from '../../components/student/ResumeUpload';
 
 export default function StudentProfile() {
   const { user, setUser } = useAuth();
   const [form, setForm] = useState({
     name: user?.name || '',
-    linkedin: user?.linkedin || '',
+    email: user?.email || '',
+    college: user?.college || '',
+    course: user?.course || '',
     skills: user?.skills || [],
-    resume: user?.resume || '',
+    bio: user?.bio || '',
   });
   const [newSkill, setNewSkill] = useState('');
-  const [resumeText, setResumeText] = useState('');
-  const [analysis, setAnalysis] = useState(null);
+  const [resume, setResume] = useState(user?.resume || null);
   const [saving, setSaving] = useState(false);
-  const [analyzing, setAnalyzing] = useState(false);
   const [saved, setSaved] = useState(false);
 
-  const set = (k) => (e) => setForm(p => ({ ...p, [k]: e.target.value }));
+  const setField = (key) => (e) => setForm(p => ({ ...p, [key]: e.target.value }));
 
   const addSkill = () => {
-    if (newSkill && !form.skills.includes(newSkill)) {
-      setForm(p => ({ ...p, skills: [...p.skills, newSkill] }));
+    if (newSkill.trim() && !form.skills.includes(newSkill.trim())) {
+      setForm(p => ({ ...p, skills: [...p.skills, newSkill.trim()] }));
       setNewSkill('');
     }
   };
 
-  const removeSkill = (s) => setForm(p => ({ ...p, skills: p.skills.filter(sk => sk !== s) }));
+  const removeSkill = (skill) => {
+    setForm(p => ({ ...p, skills: p.skills.filter(s => s !== skill) }));
+  };
 
   const handleSave = async () => {
     setSaving(true);
     try {
-      const { data } = await userService.updateProfile(form);
-      setUser(data); setSaved(true);
-      setTimeout(() => setSaved(false), 2000);
-    } catch (err) { console.error(err); }
-    finally { setSaving(false); }
+      const { data } = await userService.updateProfile({ ...form, resume });
+      setUser(data);
+      setSaved(true);
+      setTimeout(() => setSaved(false), 3000);
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setSaving(false);
+    }
   };
 
-  const handleAnalyze = async () => {
-    if (!resumeText) return;
-    setAnalyzing(true);
-    try {
-      const { data } = await resumeService.analyze(resumeText);
-      setAnalysis(data);
-      setForm(p => ({ ...p, skills: [...new Set([...p.skills, ...data.extractedSkills])] }));
-    } catch (err) { console.error(err); }
-    finally { setAnalyzing(false); }
+  const handleResumeUpload = (resumeData) => {
+    setResume(resumeData);
   };
 
-  const profileScore = user?.profile_score || 0;
+  const handleResumeRemove = () => {
+    setResume(null);
+  };
 
   return (
-    <div className="space-y-6 max-w-2xl">
-      <div>
-        <h1 className="font-display text-2xl font-bold">My Profile</h1>
-        <p className="text-gray-400 text-sm mt-1">Build a strong profile to attract referrals</p>
-      </div>
+    <div className="min-h-screen bg-gradient-to-br from-slate-950 via-indigo-950 to-slate-900 p-6">
+      <div className="max-w-6xl mx-auto">
+        {/* Header */}
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="mb-8"
+        >
+          <h1 className="text-3xl font-bold text-white mb-2">Profile Settings</h1>
+          <p className="text-gray-400">
+            Complete your profile to get better job recommendations and increase your referral chances
+          </p>
+        </motion.div>
 
-      {/* Score */}
-      <div className="card">
-        <div className="flex items-center justify-between mb-3">
-          <h3 className="font-bold flex items-center gap-2"><Zap size={16} className="text-brand-400" /> Profile Strength</h3>
-          <span className="text-brand-400 font-bold text-lg">{profileScore}%</span>
-        </div>
-        <div className="w-full bg-white/5 rounded-full h-3">
-          <motion.div initial={{ width: 0 }} animate={{ width: `${profileScore}%` }} transition={{ duration: 1 }}
-            className="h-3 bg-gradient-to-r from-brand-500 to-accent-cyan rounded-full" />
-        </div>
-      </div>
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+          {/* Profile Overview */}
+          <div className="lg:col-span-1">
+            <ProfileCard user={{ ...user, ...form, resume }} />
+          </div>
 
-      {/* Basic Info */}
-      <div className="card space-y-4">
-        <h3 className="font-display font-bold">Basic Info</h3>
-        <div className="relative">
-          <User size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-500" />
-          <input placeholder="Full Name" value={form.name} onChange={set('name')} className="input pl-11" />
-        </div>
-        <div className="relative">
-          <Linkedin size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-500" />
-          <input placeholder="LinkedIn URL" value={form.linkedin} onChange={set('linkedin')} className="input pl-11" />
-        </div>
-      </div>
+          {/* Main Content */}
+          <div className="lg:col-span-2 space-y-6">
+            {/* Basic Information */}
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.1 }}
+              className="glass rounded-2xl p-6"
+            >
+              <h2 className="text-xl font-bold text-white mb-6">Basic Information</h2>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div>
+                  <label className="block text-sm font-medium text-gray-300 mb-2">
+                    Full Name
+                  </label>
+                  <div className="relative">
+                    <User size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" />
+                    <input
+                      type="text"
+                      value={form.name}
+                      onChange={setField('name')}
+                      className="w-full pl-12 pr-4 py-3 rounded-xl glass text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500/50"
+                      placeholder="Enter your full name"
+                    />
+                  </div>
+                </div>
 
-      {/* Skills */}
-      <div className="card space-y-4">
-        <h3 className="font-display font-bold">Skills</h3>
-        <div className="flex gap-2">
-          <input placeholder="Add a skill..." value={newSkill} onChange={e => setNewSkill(e.target.value)}
-            onKeyDown={e => e.key === 'Enter' && addSkill()} className="input flex-1" />
-          <button onClick={addSkill} className="btn-primary px-4 py-3"><Plus size={16} /></button>
-        </div>
-        <div className="flex flex-wrap gap-2">
-          {form.skills.map(s => (
-            <span key={s} className="flex items-center gap-1 px-3 py-1 rounded-full bg-brand-500/10 border border-brand-500/30 text-brand-400 text-sm">
-              {s}
-              <button onClick={() => removeSkill(s)} className="hover:text-white"><X size={12} /></button>
-            </span>
-          ))}
-        </div>
-      </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-300 mb-2">
+                    Email Address
+                  </label>
+                  <div className="relative">
+                    <Mail size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" />
+                    <input
+                      type="email"
+                      value={form.email}
+                      disabled
+                      className="w-full pl-12 pr-4 py-3 rounded-xl bg-white/5 text-gray-400 cursor-not-allowed"
+                    />
+                  </div>
+                  <p className="text-xs text-gray-500 mt-1">Email cannot be changed</p>
+                </div>
 
-      {/* Resume Analyzer */}
-      <div className="card space-y-4">
-        <h3 className="font-display font-bold flex items-center gap-2"><Upload size={16} className="text-accent-cyan" /> Resume Analyzer</h3>
-        <p className="text-sm text-gray-400">Paste your resume text to analyze skills and get a score.</p>
-        <textarea value={resumeText} onChange={e => setResumeText(e.target.value)}
-          placeholder="Paste your resume content here..."
-          className="input min-h-40 resize-y text-sm" />
-        <button onClick={handleAnalyze} disabled={analyzing || !resumeText}
-          className="btn-primary flex items-center gap-2 disabled:opacity-50">
-          {analyzing ? <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" /> : <><Zap size={16} /> Analyze Resume</>}
-        </button>
+                <div>
+                  <label className="block text-sm font-medium text-gray-300 mb-2">
+                    College Name
+                  </label>
+                  <div className="relative">
+                    <GraduationCap size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" />
+                    <input
+                      type="text"
+                      value={form.college}
+                      onChange={setField('college')}
+                      className="w-full pl-12 pr-4 py-3 rounded-xl glass text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500/50"
+                      placeholder="Enter your college name"
+                    />
+                  </div>
+                </div>
 
-        {analysis && (
-          <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="space-y-3 p-4 rounded-xl glass">
-            <div className="flex items-center justify-between">
-              <span className="font-semibold">Resume Score</span>
-              <span className="font-display text-2xl font-bold text-accent-lime">{analysis.score}%</span>
-            </div>
-            <div className="w-full bg-white/5 rounded-full h-2">
-              <div className="h-2 bg-gradient-to-r from-accent-lime to-accent-cyan rounded-full" style={{ width: `${analysis.score}%` }} />
-            </div>
-            {analysis.suggestions.length > 0 && (
-              <div>
-                <p className="text-xs font-medium text-gray-400 mb-2">Suggestions</p>
-                {analysis.suggestions.map((s, i) => (
-                  <p key={i} className="text-xs text-amber-400 flex items-center gap-2">
-                    <Zap size={10} /> {s}
-                  </p>
-                ))}
+                <div>
+                  <label className="block text-sm font-medium text-gray-300 mb-2">
+                    Course / Branch
+                  </label>
+                  <div className="relative">
+                    <Building size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" />
+                    <input
+                      type="text"
+                      value={form.course}
+                      onChange={setField('course')}
+                      className="w-full pl-12 pr-4 py-3 rounded-xl glass text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500/50"
+                      placeholder="e.g., Computer Science, Mechanical Engineering"
+                    />
+                  </div>
+                </div>
               </div>
-            )}
-            <div>
-              <p className="text-xs font-medium text-gray-400 mb-2">Detected Skills</p>
-              <div className="flex flex-wrap gap-1">
-                {analysis.extractedSkills.map(s => (
-                  <span key={s} className="text-xs px-2 py-0.5 rounded-full bg-accent-cyan/10 text-accent-cyan">{s}</span>
-                ))}
-              </div>
-            </div>
-          </motion.div>
-        )}
-      </div>
 
-      <button onClick={handleSave} disabled={saving}
-        className="btn-primary w-full flex items-center justify-center gap-2">
-        {saving ? <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" /> 
-          : saved ? '✓ Saved!' : 'Save Profile'}
-      </button>
+              <div className="mt-6">
+                <label className="block text-sm font-medium text-gray-300 mb-2">
+                  Bio
+                </label>
+                <textarea
+                  value={form.bio}
+                  onChange={setField('bio')}
+                  rows={4}
+                  className="w-full px-4 py-3 rounded-xl glass text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500/50 resize-none"
+                  placeholder="Tell us about yourself, your interests, and career goals..."
+                />
+              </div>
+            </motion.div>
+
+            {/* Skills */}
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.2 }}
+              className="glass rounded-2xl p-6"
+            >
+              <h2 className="text-xl font-bold text-white mb-6">Skills</h2>
+              <div className="flex gap-2 mb-4">
+                <input
+                  type="text"
+                  value={newSkill}
+                  onChange={(e) => setNewSkill(e.target.value)}
+                  onKeyDown={(e) => e.key === 'Enter' && addSkill()}
+                  className="flex-1 px-4 py-3 rounded-xl glass text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500/50"
+                  placeholder="Add a skill (e.g., React, Python, Data Analysis)"
+                />
+                <button
+                  onClick={addSkill}
+                  className="px-6 py-3 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-medium transition-colors flex items-center gap-2"
+                >
+                  <Plus size={16} />
+                  Add
+                </button>
+              </div>
+
+              {form.skills.length > 0 && (
+                <div className="flex flex-wrap gap-2">
+                  {form.skills.map((skill, index) => (
+                    <span
+                      key={index}
+                      className="inline-flex items-center gap-2 bg-white/10 text-gray-300 px-3 py-2 rounded-full text-sm"
+                    >
+                      {skill}
+                      <button
+                        onClick={() => removeSkill(skill)}
+                        className="text-gray-400 hover:text-red-400"
+                      >
+                        <X size={14} />
+                      </button>
+                    </span>
+                  ))}
+                </div>
+              )}
+
+              {form.skills.length === 0 && (
+                <p className="text-gray-500 text-sm">
+                  Add your technical skills to improve job matching and profile strength
+                </p>
+              )}
+            </motion.div>
+
+            {/* Resume Upload */}
+            <ResumeUpload
+              currentResume={resume}
+              onUpload={handleResumeUpload}
+              onRemove={handleResumeRemove}
+            />
+
+            {/* Save Button */}
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.3 }}
+              className="flex items-center justify-between"
+            >
+              <div className="flex items-center gap-3">
+                {saved && (
+                  <>
+                    <CheckCircle size={20} className="text-green-400" />
+                    <span className="text-green-400 font-medium">Profile updated successfully!</span>
+                  </>
+                )}
+              </div>
+
+              <button
+                onClick={handleSave}
+                disabled={saving}
+                className="px-8 py-3 rounded-xl bg-blue-600 hover:bg-blue-500 disabled:bg-blue-600/50 text-white font-medium transition-colors flex items-center gap-2"
+              >
+                {saving ? (
+                  <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                ) : (
+                  <Save size={16} />
+                )}
+                {saving ? 'Saving...' : 'Save Changes'}
+              </button>
+            </motion.div>
+          </div>
+        </div>
+      </div>
     </div>
   );
 }

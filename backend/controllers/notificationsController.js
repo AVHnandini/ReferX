@@ -1,33 +1,26 @@
-const supabase = require('../config/supabase');
+import Notification from '../models/Notification.js';
 
-exports.getNotifications = async (req, res) => {
+export const getNotifications = async (req, res) => {
   try {
-    const { data, error } = await supabase
-      .from('notifications')
-      .select('*')
-      .eq('user_id', req.user.id)
-      .order('created_at', { ascending: false })
-      .limit(50);
-    if (error) throw error;
-    res.json({ notifications: data });
+    const notifications = await Notification.find({ userId: req.user.id }).sort({ createdAt: -1 }).limit(50);
+    res.json({ notifications });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
 };
 
-exports.markRead = async (req, res) => {
+export const markRead = async (req, res) => {
   try {
-    await supabase.from('notifications').update({ is_read: true })
-      .eq('user_id', req.user.id).eq('id', req.params.id);
+    await Notification.findOneAndUpdate({ userId: req.user.id, _id: req.params.id }, { isRead: true });
     res.json({ message: 'Marked as read' });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
 };
 
-exports.markAllRead = async (req, res) => {
+export const markAllRead = async (req, res) => {
   try {
-    await supabase.from('notifications').update({ is_read: true }).eq('user_id', req.user.id);
+    await Notification.updateMany({ userId: req.user.id }, { isRead: true });
     res.json({ message: 'All marked as read' });
   } catch (err) {
     res.status(500).json({ error: err.message });

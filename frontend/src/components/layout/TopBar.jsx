@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Bell, Search, X } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
-import { notificationsAPI } from '../../services/api';
+import { notificationService } from '../../services/api';
 import { Avatar, Badge } from '../ui';
 import { useNavigate } from 'react-router-dom';
 
@@ -14,7 +14,7 @@ export default function TopBar({ title }) {
   const notifRef = useRef(null);
 
   useEffect(() => {
-    notificationsAPI.getAll().then(d => setNotifs(d.notifications || [])).catch(() => {});
+    notificationService.getNotifications().then(d => setNotifs(d.data || [])).catch(() => {});
   }, []);
 
   useEffect(() => {
@@ -26,7 +26,7 @@ export default function TopBar({ title }) {
   const unread = notifs.filter(n => !n.is_read).length;
 
   const markAllRead = async () => {
-    await notificationsAPI.markAllRead().catch(() => {});
+    await notificationService.markAllRead().catch(() => {});
     setNotifs(n => n.map(x => ({ ...x, is_read: true })));
   };
 

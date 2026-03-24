@@ -1,15 +1,21 @@
-import { supabase } from '../config/supabase.js';
+import Job from '../models/Job.js';
+import User from '../models/User.js';
 
 export const createJob = async (req, res) => {
   try {
-    const { title, company, description, location, required_skills, salary, application_link } = req.body;
-    const { data, error } = await supabase
-      .from('jobs')
-      .insert({ title, company, description, location, required_skills, salary, application_link, posted_by: req.user.id, is_active: true })
-      .select()
-      .single();
-    if (error) throw error;
-    res.json(data);
+    const { title, company, description, location, skillsRequired, required_skills, salary, applicationLink, application_link } = req.body;
+    const job = new Job({
+      title,
+      company,
+      description,
+      location,
+      skillsRequired: skillsRequired || required_skills || [],
+      salary,
+      applicationLink: applicationLink || application_link || "",
+      postedBy: req.user.id,
+    });
+    await job.save();
+    res.json(job);
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -17,13 +23,8 @@ export const createJob = async (req, res) => {
 
 export const getAllJobs = async (req, res) => {
   try {
-    const { data, error } = await supabase
-      .from('jobs')
-      .select('*, users!jobs_posted_by_fkey(name, company)')
-      .eq('is_active', true)
-      .order('created_at', { ascending: false });
-    if (error) throw error;
-    res.json(data);
+    const jobs = await Job.find({ isActive: true }).populate('postedBy', 'name company').sort({ createdAt: -1 });
+    res.json(jobs);
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -31,16 +32,20 @@ export const getAllJobs = async (req, res) => {
 
 export const getRecommendedJobs = async (req, res) => {
   try {
-    const { data: user } = await supabase.from('users').select('skills').eq('id', req.user.id).single();
-    const { data: jobs } = await supabase.from('jobs').select('*, users!jobs_posted_by_fkey(name, company)').eq('is_active', true);
-    
-    const userSkills = user?.skills || [];
-    const scored = jobs?.map(job => {
-      const jobSkills = job.required_skills || [];
-      const matches = userSkills.filter(s => jobSkills.map(j => j.toLowerCase()).includes(s.toLowerCase()));
-      const matchPct = jobSkills.length > 0 ? Math.round((matches.length / jobSkills.length) * 100) : 0;
-      return { ...job, match_percentage: matchPct };
-    }).sort((a, b) => b.match_percentage - a.match_percentage) || [];
+    const user = await User.findById(req.user.id);
+    if (!user) return res.status(404).json({ error: 'User not found.' });
+
+    const jobs = await Job.find({ isActive: true }).populate('postedBy', 'name company');
+    const userSkills = user.skills || [];
+
+    const scored = jobs
+      .map((job) => {
+        const jobSkills = job.skillsRequired || [];
+        const matches = userSkills.filter((s) => jobSkills.map((j) => j.toLowerCase()).includes(s.toLowerCase()));
+        const matchPct = jobSkills.length > 0 ? Math.round((matches.length / jobSkills.length) * 100) : 0;
+        return { ...job.toObject(), match_percentage: matchPct };
+      })
+      .sort((a, b) => b.match_percentage - a.match_percentage);
 
     res.json(scored);
   } catch (err) {
@@ -50,8 +55,8 @@ export const getRecommendedJobs = async (req, res) => {
 
 export const deleteJob = async (req, res) => {
   try {
-    const { error } = await supabase.from('jobs').update({ is_active: false }).eq('id', req.params.id);
-    if (error) throw error;
+    const job = await Job.findByIdAndUpdate(req.params.id, { isActive: false }, { new: true });
+    if (!job) return res.status(404).json({ error: 'Job not found.' });
     res.json({ message: 'Job removed.' });
   } catch (err) {
     res.status(500).json({ error: err.message });

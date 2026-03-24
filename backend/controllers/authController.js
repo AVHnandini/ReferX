@@ -1,7 +1,7 @@
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import { v4 as uuidv4 } from "uuid";
-import { supabase } from "../config/supabase.js";
+import User from "../models/User.js";
 import dotenv from "dotenv";
 dotenv.config();
 
@@ -60,15 +60,8 @@ export const signup = async (req, res) => {
         .json({ error: "Please use a valid college email address." });
     }
 
-    const { data: existing, error: existingError } = await supabase
-      .from("users")
-      .select("id")
-      .eq("email", email)
-      .maybeSingle();
-
-    if (existingError) throw existingError;
-    if (existing)
-      return res.status(400).json({ error: "Email already registered." });
+    const existing = await User.findOne({ email: email.toLowerCase().trim() });
+    if (existing) return res.status(400).json({ error: "Email already registered." });
 
     const hashedPassword = await bcrypt.hash(password, 10);
     const otp = Math.floor(100000 + Math.random() * 900000).toString();
@@ -118,17 +111,12 @@ export const verifyOtp = async (req, res) => {
       return res.status(400).json({ error: "Invalid OTP." });
     }
 
-    const { data, error } = await supabase
-      .from("users")
-      .insert(stored.userData)
-      .select()
-      .single();
-
-    if (error) throw error;
+    const user = new User(stored.userData);
+    await user.save();
     otpStore.delete(email);
 
     const token = jwt.sign(
-      { id: data.id, email: data.email, role: data.role },
+      { id: user._id, email: user.email, role: user.role },
       process.env.JWT_SECRET || "secret",
       { expiresIn: "7d" },
     );
@@ -136,11 +124,11 @@ export const verifyOtp = async (req, res) => {
     res.json({
       token,
       user: {
-        id: data.id,
-        name: data.name,
-        email: data.email,
-        role: data.role,
-        verification_status: data.verification_status,
+        id: user._id,
+        name: user.name,
+        email: user.email,
+        role: user.role,
+        verificationStatus: user.verificationStatus,
       },
     });
   } catch (err) {
@@ -151,14 +139,9 @@ export const verifyOtp = async (req, res) => {
 export const login = async (req, res) => {
   try {
     const { email, password, adminKey } = req.body;
-    const { data: user, error } = await supabase
-      .from("users")
-      .select("*")
-      .eq("email", email)
-      .single();
+    const user = await User.findOne({ email: email.toLowerCase().trim() });
 
-    if (error || !user)
-      return res.status(401).json({ error: "Invalid credentials." });
+    if (!user) return res.status(401).json({ error: "Invalid credentials." });
 
     if (user.role === "admin") {
       if (!adminKey || adminKey !== process.env.ADMIN_SECRET) {
@@ -170,7 +153,7 @@ export const login = async (req, res) => {
     if (!valid) return res.status(401).json({ error: "Invalid credentials." });
 
     const token = jwt.sign(
-      { id: user.id, email: user.email, role: user.role },
+      { id: user._id, email: user.email, role: user.role },
       process.env.JWT_SECRET || "secret",
       { expiresIn: "7d" },
     );
@@ -178,11 +161,11 @@ export const login = async (req, res) => {
     res.json({
       token,
       user: {
-        id: user.id,
+        id: user._id,
         name: user.name,
         email: user.email,
         role: user.role,
-        verification_status: user.verification_status,
+        verificationStatus: user.verificationStatus,
       },
     });
   } catch (err) {
