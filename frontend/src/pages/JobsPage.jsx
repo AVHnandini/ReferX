@@ -32,15 +32,45 @@ export default function JobsPage() {
     j.location?.toLowerCase().includes(search.toLowerCase())
   );
 
+  const handleOpenReferModal = (job) => {
+    console.log('Referral button clicked', job);
+    if (!job) return;
+
+    setSelectedJob(job);
+    setShowReferModal(true);
+    setMessage(`Hi, I\'m interested in ${job.title} at ${job.company}. I would appreciate your referral.`);
+
+    const defaultAlumni = job.poster?._id || job.postedBy || job.posted_by;
+    if (defaultAlumni) {
+      setSelectedAlumni(defaultAlumni);
+    } else if (alumni.length > 0) {
+      setSelectedAlumni(alumni[0]._id || alumni[0].id);
+    }
+  };
+
   const requestReferral = async (e) => {
     e.preventDefault();
-    if (!selectedAlumni) return;
+    if (!selectedAlumni || !selectedJob) return;
+
     setRequesting(true);
     try {
-      await referralsAPI.request({ jobId: selectedJob.id || selectedJob._id, alumniId: selectedAlumni, message });
+      console.log('Sending referral request', {
+        jobId: selectedJob._id || selectedJob.id,
+        alumniId: selectedAlumni,
+        message,
+      });
+
+      await referralsAPI.request({
+        jobId: selectedJob._id || selectedJob.id,
+        alumniId: selectedAlumni,
+        message,
+      });
+
       setShowReferModal(false);
       setMessage('');
+      setSelectedAlumni('');
       alert('Referral request sent!');
+      console.log('Referral saved');
     } catch (err) {
       console.error('Referral request error:', err);
       const errorMessage = err.response?.data?.error || err.message || 'Failed to send request';
@@ -140,7 +170,7 @@ export default function JobsPage() {
                 <div className="flex gap-2 mt-4 opacity-0 group-hover:opacity-100 transition-all">
                   {user?.role === 'student' && (
                     <>
-                      <button onClick={e => { e.stopPropagation(); setSelectedJob(job); setShowReferModal(true); }}
+                              <button onClick={e => { e.stopPropagation(); handleOpenReferModal(job); }}
                         className="flex-1 btn-primary text-xs py-2 rounded-lg flex items-center justify-center gap-1">
                         Request Referral <ArrowRight size={12} />
                       </button>
@@ -224,11 +254,11 @@ export default function JobsPage() {
                 className="input-field" required>
                 <option value="">Select an alumni...</option>
                 {alumni.filter(a => !a.company || a.company.toLowerCase().includes(selectedJob?.company?.toLowerCase() || '')).map(a => (
-                  <option key={a.id} value={a.id}>{a.name} — {a.job_role} @ {a.company}</option>
+                  <option key={a._id || a.id} value={a._id || a.id}>{a.name} — {a.jobRole || a.job_role || ''} @ {a.company}</option>
                 ))}
                 {alumni.length > 0 && <option disabled>──────────────</option>}
                 {alumni.map(a => (
-                  <option key={`all-${a.id}`} value={a.id}>{a.name} — {a.company}</option>
+                  <option key={`all-${a._id || a.id}`} value={a._id || a.id}>{a.name} — {a.company}</option>
                 ))}
               </select>
             </div>
