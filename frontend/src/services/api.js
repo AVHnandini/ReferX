@@ -5,7 +5,7 @@ export const api = axios.create({
   timeout: 10000,
 });
 
-const token = localStorage.getItem('referx_token');
+const token = localStorage.getItem('token');
 if (token) api.defaults.headers.common['Authorization'] = `Bearer ${token}`;
 
 export const authService = {
@@ -17,7 +17,11 @@ export const authService = {
 export const userService = {
   getProfile: () => api.get('/users/profile'),
   updateProfile: (data) => api.put('/users/profile', data),
+  uploadProfilePhoto: (formData) => api.post('/users/upload-photo', formData, {
+    headers: { 'Content-Type': 'multipart/form-data' }
+  }),
   getAllUsers: () => api.get('/users/all'),
+  getAlumni: () => api.get('/users/alumni'),
   deleteUser: (id) => api.delete(`/users/${id}`),
 };
 
@@ -31,11 +35,13 @@ export const jobService = {
 export const referralService = {
   request: (data) => api.post('/referrals/request', data),
   respond: (id, data) => api.put(`/referrals/respond/${id}`, data),
+  schedule: (id, data) => api.put(`/referrals/schedule/${id}`, data),
   cancel: (id) => api.put(`/referrals/cancel/${id}`),
   getStatus: () => api.get('/referrals/status'),
   getStudentReferrals: () => api.get('/referrals/student'),
   getAlumniReferrals: () => api.get('/referrals/alumni'),
   getAll: () => api.get('/referrals/all'),
+  checkInterviewReminders: () => api.get('/referrals/reminders'),
 };
 
 export const chatService = {
@@ -59,3 +65,9 @@ export const notificationService = {
 export const resumeService = {
   analyze: (text) => api.post('/resume/analyze', { resumeText: text }),
 };
+
+// Aliases for backward compatibility
+export const usersAPI = userService;
+export const chatAPI = chatService;
+export const jobsAPI = jobService;
+export const referralsAPI = referralService;

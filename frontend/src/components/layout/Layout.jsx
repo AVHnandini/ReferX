@@ -1,16 +1,18 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Outlet, NavLink, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
+import { referralService } from '../../services/api';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
   LayoutDashboard, Briefcase, GitBranch, User, MessageSquare, 
-  LogOut, Menu, X, Bell, Shield, ChevronRight, Zap 
+  LogOut, Menu, X, Bell, Shield, ShieldCheck, ChevronRight, Zap 
 } from 'lucide-react';
 
 const navItems = {
   student: [
     { to: '/student', label: 'Dashboard', icon: LayoutDashboard, exact: true },
     { to: '/student/jobs', label: 'Jobs', icon: Briefcase },
+    { to: '/student/request-referral', label: 'Request Referral', icon: Bell },
     { to: '/student/referrals', label: 'Referrals', icon: GitBranch },
     { to: '/student/chat', label: 'Messages', icon: MessageSquare },
     { to: '/student/profile', label: 'Profile', icon: User },
@@ -24,6 +26,7 @@ const navItems = {
   ],
   admin: [
     { to: '/admin', label: 'Dashboard', icon: LayoutDashboard, exact: true },
+    { to: '/admin/verify', label: 'Verify Alumni', icon: ShieldCheck },
     { to: '/admin/users', label: 'Users', icon: User },
   ]
 };
@@ -35,6 +38,25 @@ export default function Layout() {
   const items = navItems[user?.role] || [];
 
   const handleLogout = () => { logout(); navigate('/'); };
+
+  // Check for interview reminders periodically
+  useEffect(() => {
+    const checkReminders = async () => {
+      try {
+        await referralService.checkInterviewReminders();
+      } catch (error) {
+        console.error('Failed to check interview reminders:', error);
+      }
+    };
+
+    // Check immediately on mount
+    checkReminders();
+
+    // Check every 30 minutes
+    const interval = setInterval(checkReminders, 30 * 60 * 1000);
+
+    return () => clearInterval(interval);
+  }, []);
 
   const Sidebar = ({ mobile = false }) => (
     <div className={`flex flex-col h-full ${mobile ? 'p-6' : 'p-6'}`}>

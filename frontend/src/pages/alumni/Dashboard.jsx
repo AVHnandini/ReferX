@@ -94,7 +94,7 @@ export default function AlumniDashboard() {
                 </div>
                 <div className="flex-1 min-w-0">
                   <p className="font-semibold text-sm text-white">{ref.student?.name}</p>
-                  <p className="text-xs text-gray-400">{ref.jobs?.title} · {ref.jobs?.company}</p>
+                  <p className="text-xs text-gray-400">{ref.jobId?.title} · {ref.jobId?.company}</p>
                   {ref.message && <p className="text-xs text-gray-500 mt-1 truncate">"{ref.message}"</p>}
                 </div>
                 <div className="flex flex-wrap gap-1">

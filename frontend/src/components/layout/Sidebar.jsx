@@ -6,13 +6,14 @@ import { Avatar } from '../ui';
 import {
   LayoutDashboard, Briefcase, Users, MessageSquare, User,
   Bell, LogOut, Sun, Moon, ChevronLeft, ChevronRight,
-  Trophy, BookOpen, Settings, ShieldCheck, BarChart3
+  Trophy, BookOpen, Settings, ShieldCheck, BarChart3, Send
 } from 'lucide-react';
 
 const navByRole = {
   student: [
     { icon: LayoutDashboard, label: 'Dashboard', to: '/student' },
     { icon: Briefcase, label: 'Jobs', to: '/jobs' },
+    { icon: Send, label: 'Request Referral', to: '/student/request-referral' },
     { icon: BookOpen, label: 'My Referrals', to: '/student/referrals' },
     { icon: Users, label: 'Alumni', to: '/student/alumni' },
     { icon: MessageSquare, label: 'Messages', to: '/chat' },
@@ -21,7 +22,8 @@ const navByRole = {
   alumni: [
     { icon: LayoutDashboard, label: 'Dashboard', to: '/alumni' },
     { icon: Briefcase, label: 'Post Jobs', to: '/alumni/jobs' },
-    { icon: BookOpen, label: 'Referral Requests', to: '/alumni/referrals' },
+    { icon: BookOpen, label: 'Referral Requests', to: '/alumni/requests' },
+    { icon: User, label: 'Profile Settings', to: '/alumni/profile' },
     { icon: MessageSquare, label: 'Messages', to: '/chat' },
   ],
   admin: [

@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { GitBranch, Clock, CheckCircle, XCircle, Award, Briefcase, X } from 'lucide-react';
+import { GitBranch, Clock, CheckCircle, XCircle, Award, Briefcase, X, Calendar, ExternalLink } from 'lucide-react';
 import { referralService } from '../../services/api';
 import { useToast } from '../../context/ToastContext';
+import ReferralFeedback from '../../components/referral/ReferralFeedback';
 
 const STATUS_CONFIG = {
   pending: { icon: Clock, color: 'yellow', bgColor: 'bg-yellow-500/10', borderColor: 'border-yellow-500/20', textColor: 'text-yellow-400' },
@@ -15,23 +16,26 @@ export default function StudentReferrals() {
   const [referrals, setReferrals] = useState([]);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState('all');
-  const toast = useToast();
+  const { addToast } = useToast();
 
   useEffect(() => {
     referralService.getStudentReferrals()
       .then(r => setReferrals(r.data))
-      .catch(console.error)
+      .catch(error => {
+        console.error(error);
+        addToast('Failed to load referrals', 'error');
+      })
       .finally(() => setLoading(false));
-  }, []);
+  }, [addToast]);
 
   const cancelReferral = async (id) => {
     if (!confirm('Are you sure you want to cancel this referral request?')) return;
     try {
       await referralService.cancel(id);
-      setReferrals(prev => prev.map(r => r.id === id ? { ...r, status: 'cancelled' } : r));
-      toast.success('Referral request cancelled successfully');
+      setReferrals(prev => prev.filter(r => r._id !== id));
+      addToast('Referral request cancelled successfully', 'success');
     } catch (err) {
-      toast.error('Failed to cancel referral');
+      addToast('Failed to cancel referral', 'error');
     }
   };
 
@@ -158,7 +162,7 @@ export default function StudentReferrals() {
 
               return (
                 <motion.div
-                  key={ref.id}
+                  key={ref._id}
                   initial={{ opacity: 0, y: 20 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: 0.2 + index * 0.05 }}
@@ -167,7 +171,7 @@ export default function StudentReferrals() {
                   <div className="flex items-start gap-4">
                     {/* Company Logo */}
                     <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-blue-600 to-blue-800 flex items-center justify-center text-white font-bold flex-shrink-0">
-                      {ref.jobs?.company?.[0]?.toUpperCase() || '?'}
+                      {ref.jobId?.company?.[0]?.toUpperCase() || '📋'}
                     </div>
 
                     {/* Content */}
@@ -175,10 +179,10 @@ export default function StudentReferrals() {
                       <div className="flex items-start justify-between mb-2">
                         <div>
                           <h3 className="text-lg font-bold text-white mb-1">
-                            {ref.jobs?.title || 'Job Position'}
+                            {ref.jobId?.title || 'Direct Referral'}
                           </h3>
                           <p className="text-gray-400 text-sm">
-                            {ref.jobs?.company || 'Company'} • {ref.jobs?.location || 'Location'}
+                            {ref.jobId?.company || 'Company'} • {ref.jobId?.location || 'Location'}
                           </p>
                         </div>
 
@@ -192,49 +196,93 @@ export default function StudentReferrals() {
                       </div>
 
                       {/* Alumni Info */}
-                      {ref.alumni && (
+                      {ref.alumniId && (
                         <div className="flex items-center gap-2 mb-3">
                           <div className="w-6 h-6 rounded-full bg-gray-600 flex items-center justify-center">
                             <span className="text-xs font-bold text-white">
-                              {ref.alumni.name?.[0]?.toUpperCase()}
+                              {ref.alumniId.name?.[0]?.toUpperCase()}
                             </span>
                           </div>
                           <span className="text-sm text-gray-400">
-                            Requested from {ref.alumni.name} ({ref.alumni.job_role})
+                            Requested from {ref.alumniId.name} ({ref.alumniId.jobRole})
                           </span>
                         </div>
                       )}
 
-                      {/* Feedback */}
-                      {ref.feedback && (
-                        <div className="p-3 rounded-lg bg-white/5 border border-white/10">
-                          <p className="text-sm text-gray-300 italic">"{ref.feedback}"</p>
+                      {/* Message */}
+                      {ref.message && (
+                        <div className="p-3 rounded-lg bg-white/5 border border-white/10 mb-3">
+                          <p className="text-sm text-gray-300 italic">"{ref.message}"</p>
                         </div>
                       )}
 
+                      {/* Interview Details */}
+                      {ref.interviewLink && (
+                        <div className="p-3 rounded-lg bg-green-500/10 border border-green-500/20 mb-3">
+                          <p className="text-sm text-gray-400 mb-1">Interview Link</p>
+                          <a
+                            href={ref.interviewLink}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="flex items-center gap-2 text-green-400 hover:text-green-300 text-sm break-all"
+                          >
+                            <ExternalLink size={14} />
+                            {ref.interviewLink.substring(0, 50)}...
+                          </a>
+                          {ref.interviewDate && (
+                            <p className="flex items-center gap-2 text-green-400 text-sm mt-2">
+                              <Calendar size={14} />
+                              {new Date(ref.interviewDate).toLocaleString('en-US', {
+                                month: 'short',
+                                day: 'numeric',
+                                hour: '2-digit',
+                                minute: '2-digit'
+                              })}
+                            </p>
+                          )}
+                        </div>
+                      )}
+
+                      {/* Feedback */}
+                      <ReferralFeedback feedback={ref.feedback} status={ref.status} />
+
                       {/* Actions */}
-                      {ref.status === 'pending' && (
-                        <div className="mt-3">
+                      <div className="flex items-center justify-between mt-4">
+                        {ref.status === 'pending' && (
                           <button
-                            onClick={() => cancelReferral(ref.id)}
+                            onClick={() => cancelReferral(ref._id)}
                             className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-red-600/20 hover:bg-red-600/30 text-red-400 hover:text-red-300 text-sm font-medium transition-colors"
                           >
                             <X size={14} />
                             Cancel Request
                           </button>
-                        </div>
-                      )}
+                        )}
 
-                      {/* Date */}
-                      <div className="flex items-center gap-2 mt-3">
-                        <Clock size={14} className="text-gray-500" />
-                        <span className="text-xs text-gray-500">
-                          Requested on {new Date(ref.created_at).toLocaleDateString('en-US', {
-                            year: 'numeric',
-                            month: 'short',
-                            day: 'numeric'
-                          })}
-                        </span>
+                        {ref.status === 'accepted' && (ref.chatEnabled !== false) && (
+                          <button
+                            onClick={() => window.location.href = '/chat'}
+                            className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-green-600/20 hover:bg-green-600/30 text-green-300 hover:text-green-200 text-sm font-medium transition-colors"
+                          >
+                            <CheckCircle size={14} />
+                            Go to Chat
+                          </button>
+                        )}
+
+                        {ref.status === 'accepted' && (ref.chatEnabled === false) && (
+                          <span className="text-xs text-gray-400">Chat will be enabled once the backstage update completes</span>
+                        )}
+
+                        {/* Date */}
+                        <div className="flex items-center gap-2 ml-auto">
+                          <Clock size={14} className="text-gray-500" />
+                          <span className="text-xs text-gray-500">
+                            {new Date(ref.createdAt).toLocaleDateString('en-US', {
+                              year: 'numeric',
+                              month: 'short',
+                              day: 'numeric'
+                            })}
+                          </span>
+                        </div>
                       </div>
                     </div>
                   </div>

@@ -58,7 +58,17 @@ export default function Landing() {
         </div>
         <div className="flex items-center gap-3">
           <Link to="/login" className="text-sm text-gray-400 hover:text-white transition-colors px-4 py-2">Sign in</Link>
-          <Link to="/signup" className="btn-primary text-sm py-2 px-5 inline-flex items-center gap-2">
+          <Link
+            to={(() => {
+              const token = localStorage.getItem('token');
+              const role = localStorage.getItem('role');
+              if (token && role === 'student') return '/student/dashboard';
+              if (token && role === 'alumni') return '/alumni/dashboard';
+              if (token && role === 'admin') return '/admin/dashboard';
+              return '/signup';
+            })()}
+            className="btn-primary text-sm py-2 px-5 inline-flex items-center gap-2"
+          >
             Get Started <ArrowRight size={14} />
           </Link>
         </div>

@@ -2,7 +2,7 @@ import React from "react";
 import { motion } from "framer-motion";
 import { MapPin, Building, DollarSign, Clock, Star } from "lucide-react";
 
-export default function JobCard({ job, onViewDetails, onRequestReferral, delay = 0 }) {
+export default function JobCard({ job, onViewDetails, onRequestReferral, onSaveJob, delay = 0 }) {
   const matchPercentage = job.match_percentage || Math.floor(Math.random() * 40) + 60; // Mock data
 
   return (
@@ -89,7 +89,7 @@ export default function JobCard({ job, onViewDetails, onRequestReferral, delay =
           Request Referral
         </button>
         <button
-          onClick={() => onViewDetails(job)}
+          onClick={() => onSaveJob(job)}
           className="py-2 px-3 rounded-xl bg-white/10 hover:bg-white/20 text-white font-medium transition-colors"
         >
           Save Job

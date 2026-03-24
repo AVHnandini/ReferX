@@ -26,6 +26,7 @@ export default function AuthForm({ mode = "signup", initialRole = "student", onS
     jobRole: "",
     experience: "",
     linkedin: "",
+    adminKey: "",
     skills: [],
   });
 
@@ -65,6 +66,9 @@ export default function AuthForm({ mode = "signup", initialRole = "student", onS
     if (!form.email || !form.password) {
       return "Email and password are required.";
     }
+    if (isLogin && roleIsAdmin && !form.adminKey) {
+      return "Admin key is required for admin login.";
+    }
     if (!isLogin && !form.name) {
       return "Full name is required.";
     }
@@ -98,6 +102,10 @@ export default function AuthForm({ mode = "signup", initialRole = "student", onS
       password: form.password,
     };
 
+    if (isLogin && roleIsAdmin) {
+      payload.adminKey = form.adminKey;
+    }
+
     if (!isLogin) {
       payload.name = form.name;
       if (roleIsStudent) {
@@ -111,6 +119,9 @@ export default function AuthForm({ mode = "signup", initialRole = "student", onS
         payload.experience = form.experience;
         payload.linkedin = form.linkedin;
         payload.skills = form.skills;
+      }
+      if (roleIsAdmin) {
+        payload.adminKey = form.adminKey;
       }
     }
 
@@ -192,6 +203,20 @@ export default function AuthForm({ mode = "signup", initialRole = "student", onS
                 {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
               </button>
             </div>
+
+            {isLogin && roleIsAdmin && (
+              <div className="relative">
+                <ShieldAlert size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" />
+                <input
+                  type="password"
+                  placeholder="Admin Key"
+                  value={form.adminKey}
+                  onChange={setField("adminKey")}
+                  className={baseInput + " pl-12"}
+                  required
+                />
+              </div>
+            )}
 
             {!isLogin && (
               <div className="relative">
@@ -303,6 +328,21 @@ export default function AuthForm({ mode = "signup", initialRole = "student", onS
                     </span>
                   ))}
                 </div>
+              </div>
+            )}
+
+            {/* Admin-specific */}
+            {roleIsAdmin && !isLogin && (
+              <div className="relative">
+                <ShieldAlert size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" />
+                <input
+                  type="password"
+                  placeholder="Admin Key"
+                  value={form.adminKey}
+                  onChange={setField("adminKey")}
+                  className={baseInput + " pl-12"}
+                  required
+                />
               </div>
             )}
 

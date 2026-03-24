@@ -66,6 +66,9 @@ app.use((req, res, next) => {
   res.status(400).json({ error: "Malformed JSON in request body" });
 });
 
+// Serve static files for uploads
+app.use('/uploads', express.static('uploads'));
+
 app.use("/auth", authRoutes);
 app.use("/users", userRoutes);
 app.use("/jobs", jobRoutes);

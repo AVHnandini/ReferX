@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import axios from 'axios';
 import { motion } from 'framer-motion';
 import { Search, Filter, Briefcase, CheckCircle } from 'lucide-react';
 import { jobService, referralService, userService } from '../../services/api';
@@ -10,22 +11,30 @@ export default function StudentJobs() {
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedSkills, setSelectedSkills] = useState([]);
-  const [requestModal, setRequestModal] = useState(null);
-  const [message, setMessage] = useState('');
+
+  const [showReferralModal, setShowReferralModal] = useState(false);
+  const [selectedJob, setSelectedJob] = useState(null);
+  const [referralMessage, setReferralMessage] = useState('');
   const [submitting, setSubmitting] = useState(false);
+
+  const [detailJob, setDetailJob] = useState(null);
+  const [savedJobs, setSavedJobs] = useState(() => JSON.parse(localStorage.getItem('savedJobs') || '[]'));
   const [alumni, setAlumni] = useState([]);
-  const [selectedAlumni, setSelectedAlumni] = useState(null);
   const toast = useToast();
 
   useEffect(() => {
     Promise.all([jobService.getRecommended(), userService.getAllUsers()])
       .then(([j, u]) => {
         setJobs(j.data);
-        setAlumni(u.data.filter(u => u.role === 'alumni' && u.verification_status === 'approved'));
+        setAlumni(u.data.filter(u => u.role === 'alumni' && u.verificationStatus === 'approved'));
       })
       .catch(console.error)
       .finally(() => setLoading(false));
   }, []);
+
+  useEffect(() => {
+    localStorage.setItem('savedJobs', JSON.stringify(savedJobs));
+  }, [savedJobs]);
 
   const filteredJobs = jobs.filter(job => {
     const matchesSearch = job.title?.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -53,37 +62,101 @@ export default function StudentJobs() {
   };
 
   const handleViewDetails = (job) => {
-    // Navigate to job details page or open modal
-    console.log('View job details:', job);
+    setDetailJob(job);
   };
 
-  const handleRequestReferral = (job) => {
-    setRequestModal(job);
-    setSelectedAlumni(null);
-    setMessage('');
+  const handleCloseDetails = () => {
+    setDetailJob(null);
   };
 
-  const submitReferralRequest = async () => {
-    if (!requestModal || !selectedAlumni) return;
-    setSubmitting(true);
+  const handleSaveJob = (job) => {
+    setSavedJobs(prev => {
+      const alreadySaved = prev.some(item => (item._id || item.id) === (job._id || job.id));
+      if (alreadySaved) {
+        toast.error('Job already saved');
+        return prev;
+      }
+      toast.success('Job added to saved list');
+      return [...prev, job];
+    });
+  };
+
+  const handleOpenReferralModal = (job) => {
+    console.log('Button clicked', job);
+
+    if (!job || (!job._id && !job.id)) {
+      toast.error('Invalid job, cannot request referral.');
+      return;
+    }
+
+    const alumniFromJob = job.postedBy || job.posted_by;
+    if (!alumniFromJob) {
+      toast.error('Job has no associated alumni.');
+      return;
+    }
+
+    console.log('selectedJob', job);
+    setSelectedJob(job);
+    setReferralMessage(`Hi, I am interested in ${job.title} at ${job.company}. I would appreciate your referral.`);
+    setShowReferralModal(true);
+  };
+
+  const handleCloseReferralModal = () => {
+    setShowReferralModal(false);
+    setSelectedJob(null);
+    setReferralMessage('');
+  };
+
+  const handleSubmitReferral = async () => {
+    if (!selectedJob) {
+      toast.error('No selected job to request referral for.');
+      return;
+    }
+
+    const jobId = selectedJob._id || selectedJob.id;
+    let alumniId = selectedJob.postedBy || selectedJob.posted_by;
+    if (alumniId && typeof alumniId === 'object') {
+      alumniId = alumniId._id || alumniId.id;
+    }
+
+    if (!jobId || !alumniId) {
+      toast.error('Invalid job or alumni data for referral request.');
+      return;
+    }
+
+    if (!referralMessage.trim()) {
+      toast.error('Please type a referral message.');
+      return;
+    }
 
     try {
-      await referralService.request({
-        alumni_id: selectedAlumni.id,
-        job_id: requestModal.id,
-        message: message || 'I would appreciate a referral for this position.'
+      setSubmitting(true);
+      console.log('selectedJob details', selectedJob);  
+      console.log('posting referral', { jobId, alumniId, message: referralMessage });
+
+      const token = localStorage.getItem('token');
+      await axios.post('/api/referrals/request', {
+        jobId,
+        alumniId,
+        message: referralMessage,
+      }, {
+        headers: { Authorization: `Bearer ${token}` },
       });
 
-      toast.success('Referral request sent successfully!');
-      setRequestModal(null);
-      setSelectedAlumni(null);
-      setMessage('');
+      toast.success('Referral requested');
+      console.log('Referral saved');
+      setShowReferralModal(false);
+      setSelectedJob(null);
+      setReferralMessage('');
     } catch (err) {
-      toast.error(err.response?.data?.error || 'Failed to send request');
+      console.error(err);
+      toast.error(err.response?.data?.error || 'Failed to submit referral request');
     } finally {
       setSubmitting(false);
     }
   };
+
+
 
   if (loading) {
     return (
@@ -202,21 +275,85 @@ export default function StudentJobs() {
                 key={job.id}
                 job={job}
                 onViewDetails={handleViewDetails}
-                onRequestReferral={handleRequestReferral}
+                onRequestReferral={handleOpenReferralModal}
+                onSaveJob={handleSaveJob}
                 delay={0.2 + index * 0.1}
               />
             ))}
           </motion.div>
         )}
 
-        {/* Referral Request Modal */}
-        {requestModal && (
+        {/* Job Detail Modal */}
+        {detailJob && (
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50"
-            onClick={() => setRequestModal(null)}
+            onClick={handleCloseDetails}
+          >
+            <motion.div
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.9, opacity: 0 }}
+              className="glass rounded-2xl p-6 w-full max-w-xl max-h-[80vh] overflow-y-auto"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="flex items-start justify-between gap-4 mb-4">
+                <div>
+                  <h3 className="text-2xl font-bold text-white">{detailJob.title}</h3>
+                  <p className="text-gray-400">{detailJob.company}</p>
+                </div>
+                <button
+                  onClick={handleCloseDetails}
+                  className="px-3 py-1 rounded-lg bg-white/10 text-white hover:bg-white/20"
+                >
+                  Close
+                </button>
+              </div>
+              <p className="text-gray-300 mb-3">{detailJob.description || 'No description available.'}</p>
+              <div className="grid grid-cols-2 gap-4 text-sm text-gray-300">
+                <div>
+                  <span className="font-medium text-white">Location: </span>
+                  {detailJob.location || 'N/A'}
+                </div>
+                <div>
+                  <span className="font-medium text-white">Type: </span>
+                  {detailJob.type || 'Full-time'}
+                </div>
+                <div>
+                  <span className="font-medium text-white">Salary: </span>
+                  {detailJob.salary || 'Not specified'}
+                </div>
+                <div>
+                  <span className="font-medium text-white">Match: </span>
+                  {detailJob.match_percentage ? `${detailJob.match_percentage}%` : 'N/A'}
+                </div>
+              </div>
+              {detailJob.required_skills?.length > 0 && (
+                <div className="mt-4">
+                  <p className="text-white font-semibold mb-2">Required Skills:</p>
+                  <div className="flex flex-wrap gap-2">
+                    {detailJob.required_skills.map((skill) => (
+                      <span key={skill} className="px-2 py-1 bg-blue-600/20 text-blue-200 text-xs rounded-full">
+                        {skill}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </motion.div>
+          </motion.div>
+        )}
+
+        {/* Referral Request Modal */}
+        {showReferralModal && selectedJob && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50"
+            onClick={handleCloseReferralModal}
           >
             <motion.div
               initial={{ scale: 0.9, opacity: 0 }}
@@ -226,70 +363,30 @@ export default function StudentJobs() {
               onClick={(e) => e.stopPropagation()}
             >
               <h3 className="text-xl font-bold text-white mb-4">Request Referral</h3>
-              <div className="mb-4">
-                <p className="text-gray-300 mb-2">Position: {requestModal.title}</p>
-                <p className="text-gray-400 text-sm">Company: {requestModal.company}</p>
-              </div>
+              <p className="text-gray-300 mb-2">Job: {selectedJob.title}</p>
+              <p className="text-gray-400 text-sm mb-4">Company: {selectedJob.company}</p>
 
-              <div className="mb-4">
-                <h4 className="text-white font-medium mb-3">Select Alumni to Request From:</h4>
-                <div className="space-y-2 max-h-48 overflow-y-auto">
-                  {alumni.filter(a => a.verification_status === 'approved').map((alum) => (
-                    <div
-                      key={alum.id}
-                      onClick={() => setSelectedAlumni(alum)}
-                      className={`p-3 rounded-xl cursor-pointer transition-colors ${
-                        selectedAlumni?.id === alum.id
-                          ? 'bg-blue-600/20 border border-blue-500/50'
-                          : 'glass hover:bg-white/10'
-                      }`}
-                    >
-                      <div className="flex items-center gap-3">
-                        <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-600 to-blue-800 flex items-center justify-center text-white font-bold text-sm">
-                          {alum.name?.[0]?.toUpperCase()}
-                        </div>
-                        <div className="flex-1">
-                          <p className="text-white font-medium">{alum.name}</p>
-                          <p className="text-gray-400 text-sm">{alum.job_role} at {alum.company}</p>
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-                {alumni.filter(a => a.verification_status === 'approved').length === 0 && (
-                  <p className="text-gray-400 text-sm text-center py-4">No verified alumni available for this company.</p>
-                )}
-              </div>
+              <textarea
+                rows={5}
+                value={referralMessage}
+                onChange={(e) => setReferralMessage(e.target.value)}
+                className="w-full bg-gray-900 border border-gray-700 rounded-xl p-3 text-white placeholder-gray-500 focus:outline-none focus:border-blue-500"
+                placeholder="Write a personal message to the alumni..."
+              />
 
-              {selectedAlumni && (
-                <div className="mb-4">
-                  <textarea
-                    placeholder="Add a personal message (optional)..."
-                    value={message}
-                    onChange={(e) => setMessage(e.target.value)}
-                    rows={3}
-                    className="w-full px-4 py-3 rounded-xl glass text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500/50 resize-none"
-                  />
-                </div>
-              )}
-
-              <div className="flex gap-3">
+              <div className="flex gap-3 mt-4">
                 <button
-                  onClick={() => setRequestModal(null)}
-                  className="flex-1 py-3 px-4 rounded-xl glass text-gray-300 hover:bg-white/10 transition-colors"
+                  onClick={handleCloseReferralModal}
+                  className="flex-1 py-3 rounded-xl glass text-gray-300 hover:bg-white/10"
                 >
                   Cancel
                 </button>
                 <button
-                  onClick={submitReferralRequest}
-                  disabled={submitting || !selectedAlumni}
-                  className="flex-1 py-3 px-4 rounded-xl bg-blue-600 hover:bg-blue-500 disabled:bg-blue-600/50 text-white font-medium transition-colors flex items-center justify-center gap-2"
+                  onClick={handleSubmitReferral}
+                  disabled={submitting || !referralMessage.trim()}
+                  className="flex-1 py-3 rounded-xl bg-blue-600 hover:bg-blue-500 disabled:bg-blue-700/50 text-white"
                 >
-                  {submitting ? (
-                    <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                  ) : (
-                    'Send Request'
-                  )}
+                  {submitting ? 'Sending...' : 'Send Referral'}
                 </button>
               </div>
             </motion.div>

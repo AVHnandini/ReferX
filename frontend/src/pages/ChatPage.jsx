@@ -1,9 +1,9 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import DashboardLayout from '../components/layout/DashboardLayout';
-import { chatAPI, usersAPI } from '../services/api';
+import { chatAPI, usersAPI, referralService } from '../services/api';
 import { useAuth } from '../context/AuthContext';
 import { Avatar, EmptyState, Skeleton } from '../components/ui';
-import { Send, MessageSquare, Search } from 'lucide-react';
+import { Send, MessageSquare, Search, Lock, CheckCircle } from 'lucide-react';
 import { io } from 'socket.io-client';
 
 const SOCKET_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
@@ -20,6 +20,8 @@ export default function ChatPage() {
   const [searchAlumni, setSearchAlumni] = useState('');
   const [alumni, setAlumni] = useState([]);
   const [onlineUsers, setOnlineUsers] = useState([]);
+  const [hasValidReferral, setHasValidReferral] = useState(false);
+  const [referralLoading, setReferralLoading] = useState(false);
   const messagesEndRef = useRef(null);
   const socketRef = useRef(null);
   const typingTimeoutRef = useRef(null);
@@ -55,8 +57,38 @@ export default function ChatPage() {
   useEffect(() => {
     if (activeUser) {
       chatAPI.getMessages(activeUser.id).then(d => setMessages(d.messages || []));
+      
+      // Check if there's an accepted referral
+      setReferralLoading(true);
+      checkReferralStatus(activeUser.id);
     }
   }, [activeUser]);
+
+  const checkReferralStatus = async (otherUserId) => {
+    try {
+      const referrals = user.role === 'student'
+        ? (await referralService.getStudentReferrals()).data
+        : (await referralService.getAlumniReferrals()).data;
+      
+      const referral = referrals.find(ref => {
+        const isStudent = user.role === 'student';
+        const studentId = isStudent ? user.id : otherUserId;
+        const alumniId = isStudent ? otherUserId : user.id;
+        
+        return ref.studentId?._id === studentId && 
+               ref.alumniId?._id === alumniId && 
+               ref.status === 'accepted' &&
+               (ref.chatEnabled === undefined ? true : ref.chatEnabled);
+      });
+      
+      setHasValidReferral(!!referral);
+    } catch (error) {
+      console.error('Failed to check referral status:', error);
+      setHasValidReferral(false);
+    } finally {
+      setReferralLoading(false);
+    }
+  };
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -65,6 +97,12 @@ export default function ChatPage() {
   const sendMessage = async (e) => {
     e.preventDefault();
     if (!input.trim() || !activeUser) return;
+    
+    if (!hasValidReferral) {
+      alert('You can only message after a referral request has been accepted.');
+      return;
+    }
+    
     setSending(true);
     
     const msgData = {
@@ -243,14 +281,36 @@ export default function ChatPage() {
               </div>
 
               {/* Input */}
-              <form onSubmit={sendMessage} className="glass border-t border-white/5 p-4 flex gap-3">
-                <input value={input} onChange={e => { setInput(e.target.value); handleTyping(); }}
-                  className="flex-1 bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-sm text-white placeholder-white/30 focus:outline-none focus:border-[#00FF87]/30 transition-all"
-                  placeholder={`Message ${activeUser.name}...`} />
-                <button type="submit" disabled={!input.trim() || sending}
-                  className="w-12 h-12 rounded-xl bg-[#00FF87] text-black flex items-center justify-center hover:bg-[#00e67a] transition-all disabled:opacity-40 disabled:cursor-not-allowed active:scale-95">
-                  <Send size={16} />
-                </button>
+              <form onSubmit={sendMessage} className="glass border-t border-white/5 p-4 flex flex-col gap-3">
+                {referralLoading && (
+                  <div className="text-xs text-white/50 text-center">Checking referral status...</div>
+                )}
+                {!hasValidReferral && !referralLoading && (
+                  <div className="flex items-center gap-2 px-4 py-3 bg-amber-500/10 border border-amber-500/20 rounded-lg">
+                    <Lock size={16} className="text-amber-400 flex-shrink-0" />
+                    <p className="text-xs text-amber-300">
+                      Chat is enabled after referral acceptance.{' '}
+                      <button type="button" onClick={() => window.location.href = user.role === 'student' ? '/student/request-referral' : '/alumni/requests'}
+                        className="underline">Start request</button>
+                    </p>
+                  </div>
+                )}
+                {hasValidReferral && (
+                  <div className="flex items-center gap-2 px-4 py-2 bg-green-500/10 border border-green-500/20 rounded-lg">
+                    <CheckCircle size={14} className="text-green-400" />
+                    <p className="text-xs text-green-300">Referral accepted • Chat enabled</p>
+                  </div>
+                )}
+                <div className="flex gap-3">
+                  <input value={input} onChange={e => { setInput(e.target.value); handleTyping(); }}
+                    disabled={!hasValidReferral}
+                    className="flex-1 bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-sm text-white placeholder-white/30 focus:outline-none focus:border-[#00FF87]/30 transition-all disabled:opacity-40"
+                    placeholder={hasValidReferral ? `Message ${activeUser.name}...` : 'Waiting for referral acceptance...'} />
+                  <button type="submit" disabled={!input.trim() || sending || !hasValidReferral}
+                    className="w-12 h-12 rounded-xl bg-[#00FF87] text-black flex items-center justify-center hover:bg-[#00e67a] transition-all disabled:opacity-40 disabled:cursor-not-allowed active:scale-95">
+                    <Send size={16} />
+                  </button>
+                </div>
               </form>
             </>
           ) : (

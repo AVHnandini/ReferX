@@ -7,6 +7,7 @@ import { useNavigate, NavLink } from "react-router-dom";
 const navItems = [
   { to: "/student", label: "Dashboard", icon: LayoutDashboard, exact: true },
   { to: "/student/jobs", label: "Jobs", icon: Briefcase },
+  { to: "/student/request-referral", label: "Request Referral", icon: Bell },
   { to: "/student/referrals", label: "Referrals", icon: GitBranch },
   { to: "/student/chat", label: "Messages", icon: MessageSquare },
   { to: "/student/profile", label: "Profile", icon: User },

@@ -37,12 +37,14 @@ export default function JobsPage() {
     if (!selectedAlumni) return;
     setRequesting(true);
     try {
-      await referralsAPI.request({ jobId: selectedJob.id, alumniId: selectedAlumni, message });
+      await referralsAPI.request({ jobId: selectedJob.id || selectedJob._id, alumniId: selectedAlumni, message });
       setShowReferModal(false);
       setMessage('');
       alert('Referral request sent!');
     } catch (err) {
-      alert(err.error || 'Failed to send request');
+      console.error('Referral request error:', err);
+      const errorMessage = err.response?.data?.error || err.message || 'Failed to send request';
+      alert(errorMessage);
     } finally {
       setRequesting(false);
     }
